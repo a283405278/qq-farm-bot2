@@ -16,8 +16,8 @@ function createTimeCard(days = 30) {
   return result.data.code;
 }
 
-function register(username, cardCode) {
-  const result = userStore.registerUser({ username, password: PASSWORD, cardCode });
+function register(username, cardCode, qq = '10000001') {
+  const result = userStore.registerUser({ username, password: PASSWORD, cardCode, qq });
   assert.equal(result.ok, true);
   return result.data;
 }
@@ -186,4 +186,21 @@ test('POST /api/admin/users/cleanup-expired 支持 dryRun 预览', () => {
   assert.equal(res.payload.data.dryRun, true);
   assert.ok(res.payload.data.usernames.includes('expiredfordryrun'));
   assert.ok(userStore.findUser('expiredfordryrun'));
+});
+
+test('registerUser 强制要求合法QQ号并正确存储', () => {
+  assert.equal(userStore.registerUser({ username: 'qqmissing', password: PASSWORD, cardCode: createTimeCard() }).ok, false);
+
+  const badQq = userStore.registerUser({ username: 'qqbad', password: PASSWORD, cardCode: createTimeCard(), qq: '123' });
+  assert.equal(badQq.ok, false);
+  assert.match(badQq.error, /QQ号/);
+
+  const registered = userStore.registerUser({ username: 'qqgood', password: PASSWORD, cardCode: createTimeCard(), qq: '88888888' });
+  assert.equal(registered.ok, true);
+  assert.equal(registered.data.qq, '88888888');
+  assert.equal(userStore.getUser('qqgood').qq, '88888888');
+
+  assert.deepEqual(userStore.normalizeQq(''), { ok: false, error: 'QQ号不能为空' });
+  assert.equal(userStore.normalizeQq('abc123').ok, false);
+  assert.deepEqual(userStore.normalizeQq('1234567'), { ok: true, data: '1234567' });
 });

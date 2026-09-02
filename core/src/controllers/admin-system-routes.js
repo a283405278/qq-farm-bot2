@@ -100,6 +100,58 @@ function registerAdminSystemRoutes({
     }
   });
 
+  app.get(
+    "/api/admin/group-verify",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      try {
+        res.json({ ok: true, data: store.getGroupVerifyConfig() });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/group-verify",
+    requireAdminToken,
+    requireAdminRole,
+    (req, res) => {
+      try {
+        const { enabled, qqGroupNumber, verifyUrl, verifyToken, timeoutMs } = req.body || {};
+        if (enabled === true) {
+          const url = String(verifyUrl || "").trim();
+          if (!url) {
+            return res.status(400).json({ ok: false, error: "启用群验证时必须填写验证接口地址" });
+          }
+          if (!/^https?:\/\//i.test(url)) {
+            return res.status(400).json({ ok: false, error: "验证接口地址必须以 http:// 或 https:// 开头" });
+          }
+          if (!String(qqGroupNumber || "").trim()) {
+            return res.status(400).json({ ok: false, error: "启用群验证时必须填写QQ群号" });
+          }
+        }
+        const saved = store.setGroupVerifyConfig({
+          enabled,
+          qqGroupNumber,
+          verifyUrl,
+          verifyToken,
+          timeoutMs,
+        });
+        logger.warn("更新QQ群验证配置", {
+          admin: req.currentUser?.username || "",
+          enabled: saved?.enabled === true,
+          qqGroupNumber: saved?.qqGroupNumber || "",
+          verifyUrl: saved?.verifyUrl || "",
+        });
+        res.json({ ok: true, data: saved });
+      } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
+    },
+  );
+
   app.post(
    "/api/admin/system-config",
     requireAdminToken,

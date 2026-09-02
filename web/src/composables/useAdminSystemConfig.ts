@@ -27,6 +27,14 @@ export interface LoginLinks {
   qqGroupUrl: string
 }
 
+export interface GroupVerifyConfig {
+  enabled: boolean
+  qqGroupNumber: string
+  verifyUrl: string
+  verifyToken: string
+  timeoutMs: number
+}
+
 interface UseAdminSystemConfigOptions {
   showAlert: (message: string, type?: 'primary' | 'danger') => void
 }
@@ -57,6 +65,14 @@ const defaultLoginLinks: LoginLinks = {
   qqGroupUrl: '',
 }
 
+const defaultGroupVerifyConfig: GroupVerifyConfig = {
+  enabled: false,
+  qqGroupNumber: '',
+  verifyUrl: '',
+  verifyToken: '',
+  timeoutMs: 5000,
+}
+
 export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const systemConfigSaving = ref(false)
   const systemConfigLoading = ref(false)
@@ -64,6 +80,8 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const captureConfigTesting = ref(false)
   const loginLinksSaving = ref(false)
   const loginLogoUploading = ref(false)
+  const groupVerifyLoading = ref(false)
+  const groupVerifySaving = ref(false)
 
   const showResetSystemConfirm = ref(false)
   const showSaveSystemConfirm = ref(false)
@@ -73,6 +91,7 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const defaultSystemConfig = ref<SystemConfig>({ ...defaultSystemConfigValues })
   const localCaptureConfig = ref<CaptureConfig>({ ...defaultCaptureConfig })
   const localLoginLinks = ref<LoginLinks>({ ...defaultLoginLinks })
+  const localGroupVerify = ref<GroupVerifyConfig>({ ...defaultGroupVerifyConfig })
 
   async function loadLoginLinks() {
     try {
@@ -299,6 +318,41 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     showResetSystemConfirm.value = true
   }
 
+  async function loadGroupVerify() {
+    groupVerifyLoading.value = true
+    try {
+      const { data } = await api.get('/api/admin/group-verify')
+      if (data?.ok && data.data)
+        localGroupVerify.value = { ...defaultGroupVerifyConfig, ...data.data, verifyToken: '' }
+    }
+    catch (e: any) {
+      console.error('加载QQ群验证配置失败:', e)
+    }
+    finally {
+      groupVerifyLoading.value = false
+    }
+  }
+
+  async function handleSaveGroupVerify() {
+    groupVerifySaving.value = true
+    try {
+      const { data } = await api.post('/api/admin/group-verify', localGroupVerify.value)
+      if (data?.ok && data.data) {
+        localGroupVerify.value = { ...data.data, verifyToken: '' }
+        options.showAlert('QQ群验证配置已保存', 'primary')
+      }
+      else {
+        options.showAlert(data?.error || '保存失败', 'danger')
+      }
+    }
+    catch (e: any) {
+      options.showAlert(e?.response?.data?.error || `保存失败: ${e.message || '未知错误'}`, 'danger')
+    }
+    finally {
+      groupVerifySaving.value = false
+    }
+  }
+
   function openSaveSystemConfirm() {
     showSaveSystemConfirm.value = true
   }
@@ -327,6 +381,11 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     handleResetLoginLinks,
     openResetLoginLinksConfirm,
     handleUploadLoginLogo,
+    loadGroupVerify,
+    handleSaveGroupVerify,
+    localGroupVerify,
+    groupVerifyLoading,
+    groupVerifySaving,
     loadSystemConfig,
     handleSaveSystemConfig,
     handleResetSystemConfig,

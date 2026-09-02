@@ -1,4 +1,49 @@
+const fetch = require("node-fetch");
+
 const ADMIN_LOGIN_LOG_LIMIT = 200;
+
+function hasElevatedRole(user) {
+  return user && (user.role === "admin" || user.role === "super_admin");
+}
+
+async function verifyGroupMembership(qq, config) {
+  const verifyUrl = String(config && config.verifyUrl || "").trim();
+  const qqNumber = String(qq || "").trim();
+  if (!verifyUrl) return { inGroup: false, error: "not_configured" };
+  if (!qqNumber) return { inGroup: false, error: "no_qq" };
+
+  const timeoutMs = Math.max(1000, Math.min(15000, Number(config.timeoutMs) || 5000));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const url = new URL(verifyUrl);
+    url.searchParams.set("qq", qqNumber);
+    const group = String(config.qqGroupNumber || "").trim();
+    if (group) url.searchParams.set("group", group);
+    const headers = {};
+    const token = String(config.verifyToken || "").trim();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    if (!response.ok) return { inGroup: false, error: "service_unavailable" };
+    const data = await response.json();
+    const inGroup = !!(
+      data &&
+      (data.inGroup === true ||
+        data.ok === true && data.data === true ||
+        (data.data && data.data.inGroup === true))
+    );
+    return { inGroup, error: inGroup ? "" : "not_in_group" };
+  } catch {
+    return { inGroup: false, error: "service_unavailable" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function requireAuthUser(req, res) {
   const currentUser = req.currentUser;
@@ -17,13 +62,14 @@ function registerAdminAuthRoutes({
   app,
   logger: _logger,
   userStore,
+  store,
   requireAdminToken,
   createAdminSession,
   updateAdminSessions,
   requireAdminRole,
 }) {
   /* ---------------- 登录 ---------------- */
-  app.post("/api/login", (req, res) => {
+  app.post("/api/login", async (req, res) => {
     const { username, password } = req.body || {};
     const ip = userStore.getClientIp(req);
     const userAgent = String((req.headers && req.headers["user-agent"]) || "");
@@ -115,6 +161,36 @@ function registerAdminAuthRoutes({
           .status(403)
           .json({ ok: false, error: "账号已过期，请续费", code: "EXPIRED" });
       }
+
+      // QQ 群验证（仅普通用户；管理员豁免）
+      const groupVerify = store && typeof store.getGroupVerifyConfig === "function"
+        ? store.getGroupVerifyConfig()
+        : null;
+      if (groupVerify && groupVerify.enabled === true) {
+        const boundQq = String(user.qq || "").trim();
+        const verification = await verifyGroupMembership(boundQq, groupVerify);
+        if (!verification.inGroup) {
+          const reason = verification.error === "service_unavailable"
+            ? "群验证服务不可用"
+            : "未加入QQ群";
+          userStore.recordLoginAttempt({
+            username,
+            success: false,
+            ip,
+            userAgent,
+            reason,
+          });
+          return res.status(403).json({
+            ok: false,
+            error: verification.error === "service_unavailable"
+              ? "QQ群验证服务暂不可用，请稍后再试"
+              : "请先加入QQ群后再登录",
+            code: "NOT_IN_GROUP",
+            qqGroupNumber: String(groupVerify.qqGroupNumber || ""),
+            qq: boundQq,
+          });
+        }
+      }
     }
 
     userStore.recordLoginAttempt({
@@ -147,14 +223,19 @@ function registerAdminAuthRoutes({
 
   /* ---------------- 注册（必须凭卡密） ---------------- */
   app.post("/api/register", (req, res) => {
-    const { username, password, cardCode } = req.body || {};
+    const { username, password, cardCode, qq } = req.body || {};
     const ip = userStore.getClientIp(req);
     const userAgent = String((req.headers && req.headers["user-agent"]) || "");
 
-    if (!username || !password || !cardCode) {
+    if (!username || !password || !cardCode || !qq) {
       return res
         .status(400)
-        .json({ ok: false, error: "用户名、密码和卡密均不能为空" });
+        .json({ ok: false, error: "用户名、密码、卡密和QQ号均不能为空" });
+    }
+
+    const qqCheck = userStore.normalizeQq(qq);
+    if (!qqCheck.ok) {
+      return res.status(400).json({ ok: false, error: qqCheck.error });
     }
 
     if (userStore.checkLoginRateLimit(ip)) {
@@ -167,6 +248,7 @@ function registerAdminAuthRoutes({
       username,
       password,
       cardCode,
+      qq: qqCheck.data,
     });
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.error });

@@ -24,6 +24,7 @@ const CARDS_FILE = 'cards.json';
 const LOGIN_ATTEMPTS_FILE = 'login-attempts.json';
 const LOGIN_LOGS_FILE = 'login-logs.json';
 const USERNAME_RE = /^\w{3,32}$/;
+const QQ_RE = /^\d{5,11}$/;
 const CLAIM_FILE = 'card-claim.json';
 
 const DEFAULT_ACCOUNT_LIMIT = 2;
@@ -76,6 +77,13 @@ function writeJsonFile(file, data) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function normalizeQq(value) {
+  const qq = String(value ?? '').trim();
+  if (!qq) return { ok: false, error: 'QQ号不能为空' };
+  if (!QQ_RE.test(qq)) return { ok: false, error: 'QQ号格式不正确，应为5-11位数字' };
+  return { ok: true, data: qq };
 }
 
 function getClientIp(req) {
@@ -474,6 +482,7 @@ function getUser(username) {
   }
   return {
     ...user,
+    qq: user.qq || '',
     passwordHash: undefined,
     passwordSalt: undefined,
     card,
@@ -486,6 +495,7 @@ function getUserSnapshot(username) {
   const card = user.cardCode ? findCardByCode(user.cardCode) : null;
   return {
     username: user.username,
+    qq: user.qq || '',
     role: user.role,
     accountLimit: user.accountLimit,
     card: {
@@ -502,6 +512,7 @@ function getAllUsers() {
     const card = u.cardCode ? findCardByCode(u.cardCode) : null;
     return {
       username: u.username,
+      qq: u.qq || '',
       role: u.role,
       accountLimit: u.accountLimit,
       note: u.note || '',
@@ -550,10 +561,13 @@ function calculateExpiry(baseMs, days) {
   return new Date(base + daysToMs(days)).toISOString();
 }
 
-function registerUserWithCard({ username, password, cardCode }) {
+function registerUserWithCard({ username, password, cardCode, qq }) {
   const normalizedUsername = String(username || '').trim();
   if (!normalizedUsername) return { ok: false, error: '用户名不能为空' };
   if (findUser(normalizedUsername)) return { ok: false, error: '用户名已存在' };
+
+  const qqCheck = normalizeQq(qq);
+  if (!qqCheck.ok) return qqCheck;
 
   const strength = passwordStrength(password);
   if (!strength.valid) return { ok: false, error: strength.message };
@@ -570,6 +584,7 @@ function registerUserWithCard({ username, password, cardCode }) {
 
   const user = {
     username: normalizedUsername,
+    qq: qqCheck.data,
     passwordSalt: salt,
     passwordHash: hash,
     role: 'user',
@@ -596,8 +611,8 @@ function registerUserWithCard({ username, password, cardCode }) {
   return { ok: true, data: user };
 }
 
-function registerUser({ username, password, cardCode }) {
-  return registerUserWithCard({ username, password, cardCode });
+function registerUser({ username, password, cardCode, qq }) {
+  return registerUserWithCard({ username, password, cardCode, qq });
 }
 
 function renewUser({ username, cardCode }) {
@@ -723,6 +738,11 @@ function editUser({ username, update, cardUpdate }) {
     }
     if (typeof update.accountLimit === 'number') {
       user.accountLimit = Math.max(0, update.accountLimit);
+    }
+    if (update.qq !== undefined && update.qq !== null) {
+      const qqCheck = normalizeQq(update.qq);
+      if (!qqCheck.ok) return { ok: false, error: qqCheck.error };
+      user.qq = qqCheck.data;
     }
     if (typeof update.note === 'string') user.note = update.note;
   }
@@ -1076,6 +1096,7 @@ module.exports = {
   getAllUsers,
   getAllUsersWithPassword,
   findUser,
+  normalizeQq,
   canAddAccount,
   registerUser,
   renewUser,

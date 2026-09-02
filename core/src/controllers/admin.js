@@ -427,6 +427,7 @@ function startAdminServer(dataProvider) {
     app,
     logger: adminLogger,
     userStore,
+    store,
     requireAdminToken,
     createAdminSession,
     updateAdminSessions,

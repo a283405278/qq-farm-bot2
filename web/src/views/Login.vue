@@ -14,6 +14,7 @@ const UPPERCASE_RE = /[A-Z]/
 const DIGIT_RE = /\d/
 const SPECIAL_CHAR_RE = /[!@#$%^&*(),.?":{}|<>_\-+=[\]\\;'/`~]/
 const USERNAME_RE = /^\w+$/
+const QQ_RE = /^\d{5,11}$/
 
 const userStore = useUserStore()
 const appStore = useAppStore()
@@ -24,12 +25,19 @@ const isLogin = ref(true)
 const username = ref('')
 const password = ref('')
 const cardCode = ref('')
+const qq = ref('')
 const error = ref('')
 const success = ref('')
 const loading = ref(false)
 const showPasswordStrength = ref(false)
 const lockoutRemaining = ref(0)
 const rateLimitRemaining = ref(0)
+
+const showGroupVerifyModal = ref(false)
+const groupVerifyContent = ref({
+  qq: '',
+  qqGroupNumber: '',
+})
 
 const cardClaimEnabled = ref(false)
 const cardClaimLoading = ref(false)
@@ -95,6 +103,15 @@ const usernameValid = computed(() => {
   return { valid: true, message: '' }
 })
 
+const qqValid = computed(() => {
+  const value = qq.value
+  if (!value)
+    return { valid: false, message: '' }
+  if (!QQ_RE.test(value))
+    return { valid: false, message: 'QQ号应为5-11位数字' }
+  return { valid: true, message: '' }
+})
+
 watch(password, () => {
   if (!isLogin.value && password.value)
     showPasswordStrength.value = true
@@ -131,13 +148,31 @@ function validateForm(): boolean {
       error.value = '请输入卡密'
       return false
     }
+
+    if (!qq.value) {
+      error.value = '请输入QQ号（填写的QQ必须已加入QQ群）'
+      return false
+    }
+
+    if (!QQ_RE.test(qq.value)) {
+      error.value = 'QQ号应为5-11位数字'
+      return false
+    }
   }
 
   return true
 }
 
 function applyLoginError(result: any) {
-  if (result?.errorType === 'rate_limit' || result?.code === 'RATE_LIMIT') {
+  if (result?.code === 'NOT_IN_GROUP') {
+    groupVerifyContent.value = {
+      qq: result.qq || '',
+      qqGroupNumber: result.qqGroupNumber || '',
+    }
+    showGroupVerifyModal.value = true
+    error.value = result.error || '请先加入QQ群后再登录'
+  }
+  else if (result?.errorType === 'rate_limit' || result?.code === 'RATE_LIMIT') {
     error.value = result.error || '请求过于频繁，请稍后重试'
     const ms = result.remainingMs
     if (ms)
@@ -182,12 +217,13 @@ async function handleSubmit() {
       }
     }
     else {
-      const result: any = await userStore.register(username.value, password.value, cardCode.value)
+      const result: any = await userStore.register(username.value, password.value, cardCode.value, qq.value)
       if (result.ok) {
         success.value = '注册成功，请登录'
         isLogin.value = true
         cardCode.value = ''
         password.value = ''
+        qq.value = ''
       }
       else {
         error.value = result.error || '注册失败'
@@ -213,6 +249,10 @@ function toggleMode() {
   showPasswordStrength.value = false
   lockoutRemaining.value = 0
   rateLimitRemaining.value = 0
+}
+
+function closeGroupVerifyModal() {
+  showGroupVerifyModal.value = false
 }
 
 async function checkCardClaimStatus() {
@@ -406,6 +446,26 @@ onMounted(() => {
           />
         </div>
 
+        <div v-if="!isLogin" class="form-field">
+          <label class="form-label">
+            <div class="i-carbon-identification text-sm opacity-50" />
+            QQ号
+          </label>
+          <BaseInput
+            id="qq"
+            v-model="qq"
+            type="text"
+            placeholder="请输入QQ号"
+            :required="!isLogin"
+          />
+          <p class="form-hint error font-semibold">
+            重要：填写的QQ必须已加入QQ群，否则无法登录！
+          </p>
+          <p v-if="qq && !qqValid.valid" class="form-hint error">
+            {{ qqValid.message }}
+          </p>
+        </div>
+
         <BaseButton
           type="submit"
           variant="primary"
@@ -452,6 +512,55 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Claim Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showGroupVerifyModal"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          @click.self="closeGroupVerifyModal"
+        >
+          <div class="w-[360px] rounded-xl bg-white p-5 shadow-2xl dark:bg-slate-800">
+            <div class="mb-4 text-center">
+              <div class="mb-2 i-carbon-group text-4xl text-red-500" />
+              <h3 class="text-lg font-semibold">
+                请先加入QQ群
+              </h3>
+            </div>
+            <div class="mb-4 text-center text-sm opacity-70">
+              您的QQ未通过加群验证，加入QQ群后才能登录使用。
+            </div>
+            <div class="mb-4 rounded-lg bg-slate-50 p-3 text-center text-sm dark:bg-slate-700/50">
+              <div v-if="groupVerifyContent.qq" class="mb-1 text-xs opacity-50">
+                当前绑定QQ：{{ groupVerifyContent.qq }}
+              </div>
+              <div v-if="groupVerifyContent.qqGroupNumber" class="mb-1 text-xs opacity-50">
+                QQ群号：{{ groupVerifyContent.qqGroupNumber }}
+              </div>
+              <div class="text-xs opacity-50">
+                加群后返回此页面重新登录即可
+              </div>
+            </div>
+            <button
+              v-if="appStore.loginPageConfig.qqGroupUrl"
+              class="btn btn-primary btn-block"
+              @click="closeGroupVerifyModal"
+            >
+              <a
+                :href="appStore.loginPageConfig.qqGroupUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-white no-underline"
+              >加入QQ群</a>
+            </button>
+            <button class="btn btn-primary btn-block mt-2" @click="closeGroupVerifyModal">
+              我知道了
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Claim Modal -->
     <Teleport to="body">

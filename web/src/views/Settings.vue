@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
 import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
+import AdminGroupVerifyCard from '@/components/admin/AdminGroupVerifyCard.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
 import AccountSettingsTab from '@/components/settings/AccountSettingsTab.vue'
@@ -149,10 +150,15 @@ const {
   localSystemConfig,
   defaultSystemConfig,
   localCaptureConfig,
+  localGroupVerify,
+  groupVerifyLoading,
+  groupVerifySaving,
   platformOptions,
   osOptions,
   loadCaptureConfig,
   handleTestCaptureConfig,
+  loadGroupVerify,
+  handleSaveGroupVerify,
   loadSystemConfig,
   handleResetSystemConfig,
 } = useAdminSystemConfig({ showAlert })
@@ -406,7 +412,7 @@ watch(currentAccountId, async () => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadSystemConfig(), loadCaptureConfig()])
+  await Promise.all([loadSystemConfig(), loadCaptureConfig(), loadGroupVerify()])
   await fetchAccounts()
   await fetchDeviceProtocol()
   selectFirstAccountIfNeeded()
@@ -616,6 +622,13 @@ onMounted(async () => {
             :refreshing="autoCodeRefreshing"
             @save="saveAutoCodeRefreshSettings"
             @refresh="runAutoCodeRefreshNow"
+          />
+
+          <AdminGroupVerifyCard
+            v-model:config="localGroupVerify"
+            :loading="groupVerifyLoading"
+            :saving="groupVerifySaving"
+            @save="handleSaveGroupVerify"
           />
 
           <AdminSystemPanel

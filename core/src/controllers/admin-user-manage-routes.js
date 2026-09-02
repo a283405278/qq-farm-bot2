@@ -212,6 +212,7 @@ function registerAdminUserManageRoutes({
           role,
           accountLimit,
           note,
+          qq,
           cardEnabled,
           expiresAt,
           newUsername,
@@ -226,6 +227,7 @@ function registerAdminUserManageRoutes({
         if (typeof role === 'string' && role.trim()) update.role = role.trim();
         if (typeof accountLimit === 'number') update.accountLimit = accountLimit;
         if (typeof note === 'string') update.note = note;
+        if (typeof qq === 'string') update.qq = qq;
         if (typeof isPermanent === 'boolean') update.isPermanent = isPermanent;
         if (expiresAt !== undefined) {
           if (expiresAt === null) {

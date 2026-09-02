@@ -16,6 +16,7 @@ export interface User {
   role: 'user' | 'admin' | 'super_admin'
   card: UserCard | null
   accountLimit: number
+  qq?: string
   avatar?: string
   mustChangePassword?: boolean
 }
@@ -26,6 +27,8 @@ export interface LoginResult {
   code?: string
   errorType?: 'rate_limit' | 'locked' | 'invalid_credentials'
   remainingMs?: number
+  qqGroupNumber?: string
+  qq?: string
   lockout?: {
     locked?: boolean
     remainingAttempts?: number
@@ -36,12 +39,14 @@ export interface LoginResult {
     role?: string
     card?: UserCard | null
     accountLimit?: number
+    qq?: string
     mustChangePassword?: boolean
     user: {
       username: string
       role: string
       card: UserCard | null
       accountLimit: number
+      qq?: string
       mustChangePassword?: boolean
     }
   }
@@ -112,6 +117,7 @@ export const useUserStore = defineStore('user', () => {
           role: u.role,
           card: u.card,
           accountLimit: u.accountLimit ?? 2,
+          qq: u.qq,
           mustChangePassword: res.data.data.mustChangePassword ?? u.mustChangePassword,
         }
       }
@@ -126,6 +132,8 @@ export const useUserStore = defineStore('user', () => {
           code: data.code,
           errorType: data.errorType,
           remainingMs: data.remainingMs,
+          qqGroupNumber: data.qqGroupNumber,
+          qq: data.qq,
           lockout: data.lockout,
         }
       }
@@ -133,8 +141,8 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function register(username: string, password: string, cardCode: string) {
-    const res = await api.post('/api/register', { username, password, cardCode })
+  async function register(username: string, password: string, cardCode: string, qq: string) {
+    const res = await api.post('/api/register', { username, password, cardCode, qq })
     return res.data
   }
 
