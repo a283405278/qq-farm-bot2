@@ -159,6 +159,10 @@ const {
   handleTestCaptureConfig,
   loadGroupVerify,
   handleSaveGroupVerify,
+  groupVerifyTesting,
+  groupVerifyTestQq,
+  groupVerifyTestResult,
+  handleTestGroupVerify,
   loadSystemConfig,
   handleResetSystemConfig,
 } = useAdminSystemConfig({ showAlert })
@@ -626,9 +630,13 @@ onMounted(async () => {
 
           <AdminGroupVerifyCard
             v-model:config="localGroupVerify"
+            v-model:test-qq="groupVerifyTestQq"
             :loading="groupVerifyLoading"
             :saving="groupVerifySaving"
+            :testing="groupVerifyTesting"
+            :test-result="groupVerifyTestResult"
             @save="handleSaveGroupVerify"
+            @test="handleTestGroupVerify"
           />
 
           <AdminSystemPanel

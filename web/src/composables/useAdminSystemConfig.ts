@@ -35,6 +35,18 @@ export interface GroupVerifyConfig {
   timeoutMs: number
 }
 
+export interface GroupVerifyTestResult {
+  qq: string
+  qqGroupNumber?: string
+  inGroup: boolean
+  error: string
+  errorMessage?: string
+  httpStatus?: number
+  responseBody?: unknown
+  requestUrl?: string
+  durationMs?: number
+}
+
 interface UseAdminSystemConfigOptions {
   showAlert: (message: string, type?: 'primary' | 'danger') => void
 }
@@ -82,6 +94,9 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const loginLogoUploading = ref(false)
   const groupVerifyLoading = ref(false)
   const groupVerifySaving = ref(false)
+  const groupVerifyTesting = ref(false)
+  const groupVerifyTestQq = ref('')
+  const groupVerifyTestResult = ref<GroupVerifyTestResult | null>(null)
 
   const showResetSystemConfirm = ref(false)
   const showSaveSystemConfirm = ref(false)
@@ -353,6 +368,31 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     }
   }
 
+  async function handleTestGroupVerify() {
+    const qq = groupVerifyTestQq.value.trim()
+    if (!/^\d{5,11}$/.test(qq)) {
+      options.showAlert('请先填写 5-11 位数字的测试QQ号（需能判断是否在群内）', 'danger')
+      return
+    }
+    groupVerifyTesting.value = true
+    groupVerifyTestResult.value = null
+    try {
+      const { data } = await api.post('/api/admin/group-verify/test', { qq }, { timeout: 20000 })
+      if (data?.ok && data.data) {
+        groupVerifyTestResult.value = data.data
+      }
+      else {
+        options.showAlert(data?.error || '测试失败', 'danger')
+      }
+    }
+    catch (e: any) {
+      options.showAlert(e?.response?.data?.error || `测试失败: ${e.message || '未知错误'}`, 'danger')
+    }
+    finally {
+      groupVerifyTesting.value = false
+    }
+  }
+
   function openSaveSystemConfirm() {
     showSaveSystemConfirm.value = true
   }
@@ -386,6 +426,10 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     localGroupVerify,
     groupVerifyLoading,
     groupVerifySaving,
+    groupVerifyTesting,
+    groupVerifyTestQq,
+    groupVerifyTestResult,
+    handleTestGroupVerify,
     loadSystemConfig,
     handleSaveSystemConfig,
     handleResetSystemConfig,

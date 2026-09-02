@@ -15,31 +15,75 @@ async function verifyGroupMembership(qq, config) {
   const timeoutMs = Math.max(1000, Math.min(15000, Number(config.timeoutMs) || 5000));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+  let requestUrl = "";
   try {
     const url = new URL(verifyUrl);
     url.searchParams.set("qq", qqNumber);
     const group = String(config.qqGroupNumber || "").trim();
     if (group) url.searchParams.set("group", group);
+    requestUrl = url.toString();
     const headers = {};
     const token = String(config.verifyToken || "").trim();
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const response = await fetch(url.toString(), {
+    const response = await fetch(requestUrl, {
       method: "GET",
       headers,
       signal: controller.signal,
       redirect: "follow",
     });
-    if (!response.ok) return { inGroup: false, error: "service_unavailable" };
-    const data = await response.json();
+    const durationMs = Date.now() - startedAt;
+    if (!response.ok) {
+      return {
+        inGroup: false,
+        error: "service_unavailable",
+        httpStatus: response.status,
+        requestUrl,
+        durationMs,
+      };
+    }
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = undefined;
+    }
+    if (typeof data === "undefined") {
+      return {
+        inGroup: false,
+        error: "invalid_response",
+        httpStatus: response.status,
+        responseBody: String(text).slice(0, 500),
+        requestUrl,
+        durationMs,
+      };
+    }
     const inGroup = !!(
       data &&
       (data.inGroup === true ||
         data.ok === true && data.data === true ||
         (data.data && data.data.inGroup === true))
     );
-    return { inGroup, error: inGroup ? "" : "not_in_group" };
-  } catch {
-    return { inGroup: false, error: "service_unavailable" };
+    return {
+      inGroup,
+      error: inGroup ? "" : "not_in_group",
+      httpStatus: response.status,
+      responseBody: data,
+      requestUrl,
+      durationMs,
+    };
+  } catch (err) {
+    return {
+      inGroup: false,
+      error: "service_unavailable",
+      errorMessage:
+        err && err.name === "AbortError"
+          ? `请求超时（${timeoutMs}ms）`
+          : String((err && err.message) || err),
+      requestUrl,
+      durationMs: Date.now() - startedAt,
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -391,4 +435,4 @@ function registerAdminAuthRoutes({
   );
 }
 
-module.exports = { registerAdminAuthRoutes };
+module.exports = { registerAdminAuthRoutes, verifyGroupMembership };
