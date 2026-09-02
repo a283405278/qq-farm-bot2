@@ -693,7 +693,7 @@ const globalConfig = {
     offlineReminder: { ...DEFAULT_OFFLINE_REMINDER },
     userOfflineReminders: {},
     adminPasswordHash: '',
-    announcement: { content: '', showOnce: true, updatedAt: 0 },
+    announcement: { content: '', showOnce: true, enabled: true, updatedAt: 0 },
     announcementReadRecords: {},
     superAdminAnnouncement: { content: '', password: '', updatedAt: 0 },
     systemConfig: null,
@@ -979,6 +979,7 @@ function loadGlobalConfig() {
             globalConfig.announcement = {
                 content: String(data.announcement.content || '').trim(),
                 showOnce: data.announcement.showOnce !== false,
+                enabled: data.announcement.enabled !== false,
                 updatedAt: Number(data.announcement.updatedAt) || 0
             };
         }
@@ -1702,15 +1703,17 @@ function getAnnouncement() {
     return {
         content: globalConfig.announcement?.content || '',
         showOnce: globalConfig.announcement?.showOnce ?? true,
+        enabled: globalConfig.announcement?.enabled ?? true,
         updatedAt: globalConfig.announcement?.updatedAt || 0
     };
 }
 
-function setAnnouncement(content, showOnce = true) {
+function setAnnouncement(content, showOnce = true, enabled = true) {
     globalConfig.announcement = {
         content: String(content || '').trim(),
         showOnce: !!showOnce,
-        updatedAt: Date.now()
+        enabled: enabled !== false,
+        updatedAt: Math.max(Date.now(), (globalConfig.announcement?.updatedAt || 0) + 1)
     };
     saveGlobalConfig();
     return getAnnouncement();
@@ -1731,6 +1734,7 @@ function markAnnouncementRead(username) {
 function shouldShowAnnouncement(username) {
     const announcement = getAnnouncement();
     if (!announcement.content) return false;
+    if (announcement.enabled === false) return false;
     if (!username) return false;
     if (!announcement.showOnce) return true;
     return getAnnouncementReadRecord(username) < announcement.updatedAt;

@@ -34,6 +34,9 @@ const {
 } = require("./admin-account-runtime-routes");
 const { registerAdminAccountRoutes } = require("./admin-account-routes");
 const { registerAdminAnalyticsRoutes } = require("./admin-analytics-routes");
+const {
+  registerAdminAnnouncementRoutes,
+} = require("./admin-announcement-routes");
 const { createAdminAccountAccess } = require("./admin-account-access");
 const { registerAdminAuthRoutes } = require("./admin-auth-routes");
 const { registerAdminBagRoutes } = require("./admin-bag-routes");
@@ -41,6 +44,9 @@ const { registerAdminCareerRoutes } = require("./admin-career-routes");
 const { registerAdminCaptureRoutes, setEmbeddedCapture } = require("./admin-capture-routes");
 const { createCaptureCore } = require("../capture/index");
 const { registerAdminCurrentUserRoutes } = require("./admin-current-user-routes");
+const {
+  registerAdminUserManageRoutes,
+} = require("./admin-user-manage-routes");
 const {
   registerAdminFarmOperationRoutes,
 } = require("./admin-farm-operation-routes");
@@ -71,12 +77,15 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const PUBLIC_API_PATHS = new Set([
   "/login",
-  "/auto-login",
+  "/register",
+  "/card-claim/status",
+  "/card-claim/claim",
   "/qr/create",
   "/qr/check",
   "/game-version",
   "/public/login-links",
   "/changelog",
+  "/announcement",
   "/health",
 ]);
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -157,6 +166,7 @@ function registerAuthGate(expressApp, requireAdminToken) {
     if (
       PUBLIC_API_PATHS.has(req.path)
       || req.path.startsWith("/public/capture-certificate/")
+      || req.path.startsWith("/card/info/")
     ) return next();
     return requireAdminToken(req, res, next);
   });
@@ -347,6 +357,7 @@ function startAdminServer(dataProvider) {
   const adminSessionManager = createAdminSessionManager({
     logger: adminLogger,
     getIo: () => io,
+    userStore,
   });
   const {
     cleanupInvalidAdminSessions,
@@ -383,6 +394,7 @@ function startAdminServer(dataProvider) {
     requireDangerConfirmation,
     requireSuperAdminRole,
     sendProviderError,
+    getAdminUserMutationError,
   } = adminRouteHelpers;
 
   const webDist = path.join(__dirname, "../../../web/dist");
@@ -418,6 +430,15 @@ function startAdminServer(dataProvider) {
     requireAdminToken,
     createAdminSession,
     updateAdminSessions,
+    requireAdminRole,
+  });
+  registerAdminUserManageRoutes({
+    app,
+    logger: adminLogger,
+    userStore,
+    requireAdminToken,
+    requireAdminRole,
+    getAdminUserMutationError,
   });
   registerHealthRoute(app);
   registerAuthGate(app, requireAdminToken);
@@ -539,6 +560,13 @@ function startAdminServer(dataProvider) {
     getDefaultSystemConfig,
     getRuntimeConfig,
     updateRuntimeConfig,
+  });
+  registerAdminAnnouncementRoutes({
+    app,
+    store,
+    logger: adminLogger,
+    requireAdminToken,
+    requireAdminRole,
   });
   adminLogger.info("抓包服务默认关闭，未随管理面板启动运行");
   registerAdminCaptureRoutes({
