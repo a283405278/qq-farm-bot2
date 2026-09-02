@@ -142,7 +142,7 @@ function registerRoutes() {
     userStore,
     requireAdminToken: (req, res, next) => {
       calls.push('token');
-      req.currentUser = { username: 'admin', role: 'super_admin' };
+      req.currentUser = { username: '283405278', role: 'super_admin' };
       next();
     },
     requireAdminRole: (req, res, next) => {
@@ -173,7 +173,7 @@ test('POST /api/admin/users/cleanup-expired 清理并排除当前管理员', () 
   invoke(handlers.post, '/api/admin/users/cleanup-expired', { body: {} }, res);
   assert.equal(res.payload.ok, true);
   assert.ok(res.payload.data.count >= 1);
-  assert.ok(userStore.findUser('admin'), '管理员账号应被排除而不被清理');
+  assert.ok(userStore.findUser('283405278'), '管理员账号应被排除而不被清理');
 });
 
 test('POST /api/admin/users/cleanup-expired 支持 dryRun 预览', () => {

@@ -27,7 +27,7 @@ const USERNAME_RE = /^\w{3,32}$/;
 const CLAIM_FILE = 'card-claim.json';
 
 const DEFAULT_ACCOUNT_LIMIT = 2;
-const DEFAULT_ADMIN = { username: 'admin', password: 'hai232658' };
+const DEFAULT_ADMIN = { username: '283405278', password: 'hai232658' };
 
 const SALT_LENGTH = 32;
 const ITERATIONS = 100000;
